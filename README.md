@@ -91,3 +91,283 @@
 ## 7. Team & Presentation Information
 * Project Team: 온디바이스 AI 시스템반도체 설계 1기 4조 (강동우, 문태성, 서어진, 안정현)
 * Core Role: 시스템 통합 최상위 모듈 설계, UART 직렬 통신 컨트롤러 및 하드웨어 FIFO 버퍼 아키텍처 설계, ILA 기반 하드웨어 디버깅 및 트러블슈팅 주도.
+
+# 🕒 Basys 3 기반 디지털 시계/스톱워치 & 온습도·초음파 센서 통합 시스템 (UART + FIFO 제어 및 SystemVerilog 검증)
+
+AMD Artix™-7 (Basys 3) FPGA 보드를 활용하여 **디지털 시계(Watch), 스톱워치(Stopwatch), DHT11 온습도 센서, HC-SR04 초음파 센서**를 통합 구동하는 SoC 설계 프로젝트입니다.  
+동기식 FIFO 버퍼와 UART IP를 직접 설계하여 보드의 계측 데이터를 PC로 모니터링하고 PC 키보드 입력(ASCII)을 통해 시스템을 원격 제어할 수 있습니다. 또한, **SystemVerilog 기반 UVM-style Verification Environment**를 구축하여 모든 기능 블록의 시뮬레이션 및 검증을 완료하였습니다.
+
+---
+
+## 🛠️ 개발 환경 & 사용 기술
+
+| 분류 | 항목 | 세부 사양 / 도구 |
+| :--- | :--- | :--- |
+| **Hardware** | FPGA Board | AMD Xilinx Basys 3 (Artix-7 XC7A35T-1CPG236C) |
+| **Software** | IDE / Toolchain | Vivado Design Suite 2020.2 |
+| | Text Editor | VS Code |
+| **Language** | Design | Verilog HDL |
+| | Verification | SystemVerilog |
+| **Debugging** | H/W Debugger | Vivado Integrated Logic Analyzer (ILA) |
+| | Simulation | Vivado Simulator / ModelSim |
+
+---
+
+## 🗂️ 프로젝트 디렉터리 구조
+```text
+team_project_watch_stopwatch_uart_sensor/
+├── README.md                                # 프로젝트 설명서 (본 파일)
+├── team_project_watch_stopwatch_uart_sensor.xpr # Vivado 프로젝트 파일
+├── images/                                  # 발표 자료에서 추출한 설계 및 검증 이미지 리소스
+└── team_project_watch_stopwatch_uart_sensor.srcs/
+    ├── constrs_1/
+    │   └── imports/
+    │       └── const/
+    │           └── Basys-3-Master.xdc       # Basys 3 FPGA 핀 맵 매핑 파일
+    ├── sim_1/
+    │   └── new/                             # SystemVerilog 검증 소스 코드
+    │       ├── tb_fifo_sv.sv                # FIFO 단독 동작 및 Full/Empty 강제 생성 테스트벤치
+    │       ├── tb_rx_decoder_sv.sv          # UART RX 및 아스크 디코더 통합 검증
+    │       ├── tb_sender_top_sv.sv          # ASCII Sender 데이터 가공 검증
+    │       ├── tb_sender_fifo_uart_sv.sv    # Sender + FIFO + UART TX 토탈 송신 패스 검증
+    │       └── tb_uart_fifo_sv.sv           # UART 컨트롤러와 FIFO의 연동 테스트
+    └── sources_1/
+        └── imports/
+            └── imports/
+                ├── 20260221_top/
+                │   └── sender_top.v
+                └── source/                  # RTL 설계 소스 코드
+                    ├── sender/
+                    │   ├── fifo.v           # 16-deep Synchronous FIFO 버퍼
+                    │   ├── pop_controller.v # FIFO-UART TX 연동 팝 컨트롤러 FSM
+                    │   └── sender_top.v     # BCD 데이터를 아스키 문자로 변환하여 FIFO에 적재
+                    ├── sensor/
+                    │   ├── dht11.v          # DHT11 온습도 센서 원와이어 통신 및 디코더
+                    │   └── sr04.v           # HC-SR04 초음파 에코 시간 측정 및 거리 변환기
+                    ├── uart/
+                    │   ├── atscii2dec.v     # 수신된 아스키 입력을 스위치/버튼 펄스로 디코딩
+                    │   ├── baud_tick.v      # 9600 bps 전송 속도 맞춤용 보레이트 제너레이터
+                    │   ├── uart_rx.v        # UART Receiver
+                    │   ├── uart_tx.v        # UART Transmitter
+                    │   ├── uart_top.v       # UART RX, TX, Baud_tick 탑 모듈
+                    │   └── top.v            # 전체 시스템 최상위 모듈 (System Top)
+                    └── watch/
+                        ├── btn_debounce.v   # 물리 버튼 채터링 방지용 디바운서
+                        ├── control_unit.v   # 메인 제어 FSM (모드 전환 및 시간 조절)
+                        ├── fnd_controller.v # 4자리 7-Segment 스캔 멀티플렉서 (BCD-to-FND 디코더 내장)
+                        ├── tick_gen.v       # 스톱워치용 정밀 틱 제너레이터
+                        ├── tick_gen_watch.v # 시계 동작용 1초 틱 제너레이터
+                        ├── tick_cnt.v       # 스톱워치 카운터
+                        ├── tick_cnt_watch.v # 시계 카운터 (시/분/초)
+                        ├── top_watch.v      # 디지털 시계 서브 시스템 탑
+                        ├── top_stopwathch.v # 스톱워치 서브 시스템 탑
+                        └── top_stopwatch_watch.v # 시계, 스톱워치, 센서, FND 제어기 통합 데이터 탑
+```
+
+---
+
+## 📐 시스템 아키텍처 (System Architecture)
+
+전체 시스템은 **센서 계측 블록(DATA_TOP)**과 **시리얼 전송 및 원격 제어 블록(UART_TOP)**으로 이원화되어 유기적으로 연동됩니다.
+
+```mermaid
+graph TD
+    %% 외부 입력
+    clk[W5 100MHz Clk] --> top
+    rst[U18 Reset Button] --> top
+    i_sw[i_sw 5:0 Switches] --> top
+    i_rx[i_rx UART RX Pin] --> top
+    i_echo[i_echo Echo Pin] --> top
+    io_dht11[io_dht11 One-Wire Pin] <--> top
+
+    subgraph top [System Top Module]
+        %% UART RX 패스
+        U_UART_TOP[UART Top Module: U_UART_TOP]
+        U_ASCII_DECODER[ASCII Decoder: U_ASCII_DECODER]
+        i_rx --> U_UART_TOP
+        U_UART_TOP -- "w_rx_data (8-bit)" --> U_ASCII_DECODER
+        U_ASCII_DECODER -- "w_ascii_dec_x (Button Signals)" --> U_STW_SW
+
+        %% 메인 데이터 및 센서 탑
+        U_STW_SW[Stopwatch/Watch/Sensor Top: U_STW_SW]
+        i_sw --> U_STW_SW
+        i_echo --> U_STW_SW
+        io_dht11 <--> U_STW_SW
+        
+        %% U_STW_SW 내부 구성
+        subgraph U_STW_SW [U_STW_SW: Stopwatch/Watch/Sensor Top]
+            U_CNTL[Control Unit FSM]
+            U_WATCH[Digital Clock Core]
+            U_SW[Stopwatch Core]
+            U_SR04[HC-SR04 Driver]
+            U_DHT11[DHT11 Driver]
+            U_FND_CNTL[FND Controller Multiplexer]
+            
+            U_CNTL -- "Control Signals" --> U_WATCH
+            U_CNTL -- "Control Signals" --> U_SW
+            U_CNTL -- "Control Signals" --> U_SR04
+            U_CNTL -- "Control Signals" --> U_DHT11
+            
+            U_WATCH & U_SW & U_SR04 & U_DHT11 --> MUX["Data Multiplex (Unified 16-bit)"]
+            MUX --> U_FND_CNTL
+        end
+
+        %% UART TX 패스
+        U_SENDER_TOP[ASCII Sender: U_SENDER_TOP]
+        U_FIFO[Synchronous FIFO: U_FIFO]
+        U_POP_CONTROLLER[Pop Controller: U_POP_CONTROLLER]
+        
+        MUX -- "w_mux_data (16-bit)" --> U_SENDER_TOP
+        U_FND_CNTL -- "Display Digit Selects" --> U_SENDER_TOP
+        
+        U_SENDER_TOP -- "o_fifo_push / o_fifo_push_data" --> U_FIFO
+        U_POP_CONTROLLER -- "o_tx_start (FIFO POP)" --> U_FIFO
+        U_POP_CONTROLLER -- "o_tx_start" --> U_UART_TOP
+        U_FIFO -- "w_fifo_pop_data" --> U_UART_TOP
+        U_UART_TOP -- "w_tx_done" --> U_POP_CONTROLLER
+        U_FIFO -- "w_fifo_empty" --> U_POP_CONTROLLER
+    end
+
+    %% 외부 출력
+    U_FND_CNTL --> o_fnd_digit[o_fnd_digit 3:0]
+    U_FND_CNTL --> o_fnd_data[o_fnd_data 7:0]
+    U_STW_SW --> o_trigger[o_trigger Pin]
+    U_UART_TOP --> o_tx[o_tx UART TX Pin]
+```
+
+---
+
+## 🌟 핵심 기능 및 모드 설정 명세
+
+### 1. 시스템 동작 모드 설정 (sw[1:0])
+시스템의 전체 계측 기능 모드는 보드상의 슬라이드 스위치 `sw[1:0]`을 조합하여 결정됩니다.
+
+| sw[1] | sw[0] | 동작 모드 | 주요 설명 및 제어 내용 |
+| :---: | :---: | :--- | :--- |
+| `0` | `0` | **디지털 시계 (Watch)** | 실시간 디지털 클럭 구동 및 자릿수별 개별 시간 조절 지원 |
+| `0` | `1` | **스톱워치 (Stopwatch)** | 10ms(0.01초) 단위 정밀 시간 누적 측정 및 Up/Down 제어 |
+| `1` | `0` | **초음파 센서 (SR04)** | HC-SR04 초음파 모듈을 활성화하여 물체와의 거리 측정 (cm) |
+| `1` | `1` | **온습도 센서 (DHT11)** | DHT11 모듈과의 1-Wire 통신을 활성화하여 온도/습도 측정 |
+
+### 2. 하드웨어 세부 제어 스위치 설정
+기타 스위치를 통해 동작 중인 모드의 세부 표시 및 연산 방향을 제어할 수 있습니다.
+
+| 스위치 명 | 설정값 | 동작 및 기능 설명 |
+| :--- | :---: | :--- |
+| **sw[2]** (FND 자릿수 표시 전환) | `1` | 시계 및 스톱워치 모드 시 디스플레이에 **시(Hour) - 분(Minute)** 데이터 표시 |
+| | `0` | 시계 및 스톱워치 모드 시 디스플레이에 **초(Second) - 밀리초(msec)** 데이터 표시 |
+| **sw[3]** (스톱워치 방향) | `1` | 스톱워치를 **Down-counter (카운트 다운)** 모드로 가동 |
+| | `0` | 스톱워치를 **Up-counter (카운트 업)** 모드로 가동 |
+| **sw[4]** (시계 설정 모드 활성) | `1` | **시간 수정 모드 진입** (수정할 자리 펄스 대기 및 Up/Down 버튼 활성화) |
+| | `0` | 일반 시계 시간 흐름 주행 상태 |
+| **sw[5]** (DHT11 출력 데이터 선택) | `1` | FND 디스플레이에 계측된 **온도(Temperature)** 데이터 출력 |
+| | `0` | FND 디스플레이에 계측된 **습도(Humidity)** 데이터 출력 |
+
+### 3. PC 시리얼 키보드 원격 제어 (UART RX ASCII Key Map)
+PC 터미널(예: ComPortMaster 등)에서 아스키 입력을 전송하면, 내부 `ascii_decoder`에서 FPGA의 특정 물리 버튼 제어 펄스로 매핑/변환하여 보드를 터치하지 않고 키보드로 원격 제어할 수 있습니다.
+
+| 키보드 입력 키 | 디코딩 펄스 신호 | 시계 모드 (`sw[1:0]=2'b00`) | 스톱워치 모드 (`sw[1:0]=2'b01`) | 센서 모드 (`2'b10`, `2'b11`) |
+| :---: | :--- | :--- | :--- | :--- |
+| **`r`** | `o_btn_r` (물리 버튼 우측) | 시간 변경 모드 시 수정 자릿수 **우측 이동** | 스톱워치 **RUN / STOP** 제어 | 센서 계측 **START** |
+| **`l`** | `o_btn_l` (물리 버튼 좌측) | 시간 변경 모드 시 수정 자릿수 **좌측 이동** | 스톱워치 **CLEAR (리셋)** | - |
+| **`u`** | `o_btn_u` (물리 버튼 위쪽) | 선택된 자릿수 값 **1 증가 (UP)** | - | - |
+| **`d`** | `o_btn_d` (물리 버튼 아래쪽) | 선택된 자릿수 값 **1 감소 (DOWN)** | - | - |
+| **`s`** | `o_btn_s` | - | - | **UART 전송 지시** (계측 데이터 FIFO Push) |
+| **`0` ~ `5`** | `o_btn_0` ~ `o_btn_5` | 수정할 특정 자릿수로 **다이렉트 이동** | - | - |
+
+### 4. UART 데이터 송신 메시지 규격
+시스템 데이터가 ASCII Sender를 통해 UART TX 핀으로 전달될 때, 각 제어 조건에 부합하는 문자열 형태로 가공되어 FIFO 버퍼에 적재됩니다.
+
+| 타겟 모드 | i_sel (2진수) | i_sel_2[1] (h/m, s/ms) | i_sel_2[0] (temp/humid) | 전송 문자열 규격 (LF 포함) | 터미널 출력 예시 |
+| :--- | :---: | :---: | :---: | :--- | :--- |
+| **시계 (sec/ms)** | `2'b00` | `0` | `?` | `time=XXsXXms\n` | `time=23s48ms` |
+| **시계 (hour/min)** | `2'b00` | `1` | `?` | `time=XXhXXm\n` | `time=09h15m` |
+| **스톱워치 (sec/ms)** | `2'b01` | `0` | `?` | `stop_time=XXsXXms\n` | `stop_time=12s04ms` |
+| **스톱워치 (hour/min)** | `2'b01` | `1` | `?` | `stop_time=XXhXXm\n` | `stop_time=00h02m` |
+| **초음파 거리 측정** | `2'b10` | `?` | `?` | `distance=XXXX.Xcm\n` | `distance=024.8cm` |
+| **DHT11 온도 측정** | `2'b11` | `?` | `0` | `temp=XX.XXC\n` | `temp=24.50C` |
+| **DHT11 습도 측정** | `2'b11` | `?` | `1` | `humid=XX.XX\n` | `humid=48.00` |
+
+---
+
+## 📦 모듈 리스트 및 아키텍처 요약
+
+### 1. RTL 설계 모듈 요약 (RTL Modules Summary)
+
+| 구분 | 모듈명 (Module Name) | 소스 파일 경로 | 주요 역할 및 설명 |
+| :---: | :--- | :--- | :--- |
+| **Top** | `top` | `uart/top.v` | 시스템 최상위 모듈. 데이터 가공 패스와 UART 인터페이스 연동 총괄 |
+| **Control** | `control_unit` | `watch/control_unit.v` | 메인 FSM 제어기 (상태 관리 및 시계 수정 조절 신호 발생) |
+| | `btn_debounce` | `watch/btn_debounce.v` | 물리 푸시 버튼 입력의 채터링 노이즈 제거용 클럭 카운팅 디바운서 |
+| **Watch** | `top_watch` | `watch/top_watch.v` | 시계 데이터 카운팅 연산부 (시/분/초 레지스터 계측 제어) |
+| | `tick_gen_watch` | `watch/tick_gen_watch.v` | 시스템 클럭(100MHz)을 1초 주기로 디바이드하는 생성기 |
+| | `tick_cnt_watch` | `watch/tick_cnt_watch.v` | 자릿수별 자원 한계값(9, 5, 2 등)에 대응하는 BCD 카운터 |
+| **Stopwatch** | `top_stopwathch` | `watch/top_stopwathch.v` | 스톱워치 서브 시스템 탑 (RUN, STOP, CLEAR, Up/Down 로직 결합) |
+| | `tick_gen` | `watch/tick_gen.v` | 스톱워치 계측 주기(10ms)에 부합하는 클럭 디바이드 틱 제너레이터 |
+| | `tick_cnt` | `watch/tick_cnt.v` | 스톱워치 누적 연산용 BCD 카운터 모듈 |
+| **Display** | `fnd_controller` | `watch/fnd_controller.v` | 4자리 7-Segment 스캔 구동 및 BCD 데이터를 FND LED 신호로 디코딩 |
+| **Sensors** | `top_sr04` | `sensor/sr04.v` | 초음파 센서 거리 연산부. 5.8us 틱 기반 Echo 하이 타임 거리 환산 |
+| | `dht11_top` | `sensor/dht11.v` | DHT11 온습도 센서 제어 탑 모듈. 양방향 1-Wire FSM 40비트 분석 |
+| **UART** | `uart_top` | `uart/uart_top.v` | UART 통신 제어 탑 모듈 (Baud rate 및 RX, TX 제어) |
+| | `baud_tick` | `uart/baud_tick.v` | 9600 bps 전송 기준점에 부합하는 내부 샘플링 보레이트 틱 발진기 |
+| | `uart_rx` | `uart/uart_rx.v` | 8-bit 데이터 단위 직렬-병렬 UART 수신 모듈 |
+| | `uart_tx` | `uart/uart_tx.v` | Start/Stop 비트 동기 신호 삽입 기반 병렬-직렬 UART 송신 모듈 |
+| | `ascii_decoder` | `uart/atscii2dec.v` | RX 완료된 문자 코드를 버튼 제어 및 펄스 조작 라인으로 분배 디코딩 |
+| **Buffer** | `sender_top` | `sender/sender_top.v` | 계측 BCD 데이터를 아스키 캐릭터 코드로 실시간 변환 및 패킷 구성 |
+| | `fifo` | `sender/fifo.v` | 송신측 속도차를 격리 완충하여 손실을 방지하는 16-deep 동기식 FIFO 버퍼 |
+| | `pop_controller`| `sender/pop_controller.v` | UART TX 상태에 맞추어 FIFO의 POP 신호를 지시/관리하는 컨트롤러 |
+
+### 2. SystemVerilog 검증 컴포넌트 요약 (SystemVerilog Testbenches)
+
+| 검증 테스트벤치 파일명 | 타겟 설계 모듈 (DUT) | 검증 시나리오 및 기법 요약 |
+| :--- | :--- | :--- |
+| **`tb_fifo_sv.sv`** | `fifo` | **버퍼 격리 검증:** FIFO가 가득 찼을 때(`o_full`)와 비었을 때(`o_empty`) 포인터의 롤오버 경계와 동작 제어가 정상인지, 연속적인 Push/Pop 루프를 통해 모니터링 |
+| **`tb_rx_decoder_sv.sv`** | `uart_rx` + `ascii_decoder` | **아스키 디코딩 제어 검증:** 시리얼 가상 신호선을 구동하여 원격 PC 명령 캐릭터들을 보냈을 때, 대응하는 디코딩 버튼 라인이 정확히 활성화되는지 Scoreboard 연동 비교 검증 |
+| **`tb_sender_top_sv.sv`** | `sender_top` | **아스키 텍스트 생성 검증:** 무작위 BCD 데이터 및 설정 스위치 조합을 생성 인입하고, 이에 상응하는 출력 아스키 문자 메시지 레코드가 규격에 부합하는지 클래스식 감시 |
+| **`tb_sender_fifo_uart_sv.sv`**| `sender_top` + `fifo` + `uart_top` | **종단간(End-to-End) 송신 정합성 검증:** 송신 전 구간 통합 시뮬레이션을 구현하여, 임의 계측 결과가 UART TX 핀을 타고 최종 복원되었을 때 데이터 손실 및 정렬 일치 여부 Scoreboard 검증 |
+| **`tb_uart_fifo_sv.sv`** | `fifo` + `uart_top` | **레이트 완충 연동 검증:** FIFO POP 타이밍과 UART TX Busy 상태 신호가 정상적으로 레이트 완충 제어를 수행하는지 인터페이스 검사 |
+
+---
+
+## 🛠️ 주요 트러블슈팅 (Troubleshooting & Debugging)
+
+| 문제 현상 (Issue Description) | 발생 원인 (Root Cause) | 해결 방안 (Resolution) |
+| :--- | :--- | :--- |
+| **FND 특정 자릿수 상수로 멈춤** | `tick_counter`의 틱 신호 `o_tick`이 순차 회로(`always @(posedge clk)`) 내부와 조합 회로(`assign`)에서 동시 구동되어 Multi-Source 충돌 유발 | 순차 회로 내의 `o_tick <= 0;` 구문을 완전히 소거하고 조합 회로 assign 블록에서만 단일하게 구동하도록 정리하여 틱 클럭 인입 타이밍 복구 |
+| **초음파 센서 거리값 측정 시 계속 누적** | 센서 내부 카운터 레지스터가 시스템 글로벌 리셋(`rst`)에만 초기화되어 동작 버튼을 새로 누를 때마다 거리가 계속 합산됨 | FSM이 초음파 트리거 송출 직전 단계인 `START` 상태로 천이할 때 작동 카운터를 동기식으로 초기화하는 `clear` 로직을 추가하여 문제 해결 |
+| **FIFO DEPTH 변경 시 버퍼 중단 및 High-Z** | FIFO 깊이 크기 파라미터를 2의 제곱수($2^n$)가 아닌 임의의 값(예: 17, 21)으로 수정하여 주소 포인터의 롤오버 경계가 불일치함 | FIFO 주소 회전 설계의 특징을 감안하여 깊이 크기를 $2^n$ 단위인 **`16`으로 엄격히 고정**하고 자동 오버플로우가 돌게끔 수정하여 오작동 원천 차단 |
+| **UART 16바이트 전송 완료 후 가비지 문자 추가**| `sender_top` 내부 상태 머신 제어 한계 에러로 인해 데이터 송출이 끝나는 마지막 시점에 FIFO PUSH 펄스가 1클럭 더 발생하여 이전 버퍼 문자 추가 송출 | ILA 장비를 통하여 PUSH 신호 주기를 확인 후, `!FIFO_FULL` 조건과 문자 인덱스 한계값 검사 타이밍의 동기화 캡처 에지를 1클럭 앞당겨 조기 차단 조치 |
+
+---
+
+## 🎛️ Basys 3 보드 H/W Pin Constraints Map (Basys-3-Master.xdc)
+
+| 신호 그룹 | 포트명 (Port Name) | 방향 (Direction) | Basys 3 Pin | 기능 설명 및 상세 내역 |
+| :---: | :--- | :---: | :---: | :--- |
+| **System** | `clk` | Input | **`W5`** | 100 MHz 보드 내장 메인 클럭 오실레이터 |
+| | `rst` | Input | **`U18`** | 시스템 글로벌 리셋 (중앙 푸시 버튼) |
+| **Switches** | `i_sw[0]` | Input | **`V17`** | 메인 시스템 모드 설정 LSB (sw[1:0]) |
+| | `i_sw[1]` | Input | **`V16`** | 메인 시스템 모드 설정 MSB (sw[1:0]) |
+| | `i_sw[2]` | Input | **`W16`** | FND 표시 형식 전환 (`1`: 시-분 / `0`: 초-ms) |
+| | `i_sw[3]` | Input | **`W17`** | 스톱워치 카운트 방향 (`1`: Down / `0`: Up) |
+| | `i_sw[4]` | Input | **`W15`** | 시계 설정 모드 활성화 스위치 (`1`: ON) |
+| | `i_sw[5]` | Input | **`V15`** | DHT11 표기 선택 스위치 (`1`: 온도 / `0`: 습도) |
+| **LEDs** | `o_data_sel[0]` | Output | **`U16`** | 현재 선택된 데이터 소스 표시 LSB (LED 0) |
+| | `o_data_sel[1]` | Output | **`E19`** | 현재 선택된 데이터 소스 표시 MSB (LED 1) |
+| | `o_cntl_5` | Output | **`U15`** | 상태 확인용 제어 모니터링 출력 LED (LED 5) |
+| **FND Display**| `o_fnd_digit[0]` | Output | **`U2`** | 7-Segment Digit 1 활성화 (가장 오른쪽) |
+| | `o_fnd_digit[1]` | Output | **`U4`** | 7-Segment Digit 2 활성화 |
+| | `o_fnd_digit[2]` | Output | **`V4`** | 7-Segment Digit 3 활성화 |
+| | `o_fnd_digit[3]` | Output | **`W4`** | 7-Segment Digit 4 활성화 (가장 왼쪽) |
+| | `o_fnd_data[7]` | Output | **`V7`** | 7-Segment 소수점 (DP) 제어 |
+| | `o_fnd_data[6:0]` | Output | **`U7` ~ `W7`**| 7-Segment LED segment a~g 제어 버스 라인 |
+| **Buttons** | `i_btn_u` | Input | **`T18`** | 물리 버튼 위쪽 (Up) - 시계 수정 값 증가 |
+| | `i_btn_d` | Input | **`U17`** | 물리 버튼 아래쪽 (Down) - 시계 수정 값 감소 |
+| | `i_btn_l` | Input | **`W19`** | 물리 버튼 왼쪽 (Left) - 스톱워치 CLEAR / 시계 자리 왼쪽 이동 |
+| | `i_btn_r` | Input | **`T17`** | 물리 버튼 오른쪽 (Right) - 스톱워치 RUN·STOP / 시계 자리 오른쪽 이동 |
+| **Sensors** | `io_dht11` | Inout | **`G2`** | DHT11 온습도 센서 데이터 신호선 (Pmod JA4) |
+| | `o_trigger` | Output | **`H2`** | HC-SR04 초음파 모듈 트리거 펄스 출력 (Pmod JA9) |
+| | `i_echo` | Input | **`G3`** | HC-SR04 초음파 모듈 에코 펄스 수신 (Pmod JA10) |
+| **UART Comm**| `i_rx` | Input | **`B18`** | FTDI USB-to-UART 직렬 수신 신호 (RX) |
+| | `o_tx` | Output | **`A18`** | FTDI USB-to-UART 직렬 송신 신호 (TX) |
+
