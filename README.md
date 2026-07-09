@@ -1,43 +1,7 @@
-# FPGA Integrated Control System: Watch, Environment Sensors & UART with FIFO Buffer
 
-## 1. Project Overview
-본 프로젝트는 AMD Artix-7 기반의 Basys 3 FPGA 보드를 핵심 타겟으로 하여, 디지털 시계/스톱워치 코어 로직에 
-초음파 및 온습도 센서 제어 인터페이스를 통합한 임베디드 통합 관제 시스템(Integrated Control System) 설계입니다.
-
-단순히 독립된 기능들을 나열하는 것에 그치지 않고, 각 모듈간의 데이터 버스를 통합하는 Data Routing 아키텍처를 설계했습니다. 
-특히 시스템 클럭(100MHz)과 UART 직렬 통신(9600bps) 간의 극심한 클럭 도메인 차이로 발생하는 데이터 병목 및 유실 문제를 해결하기 위해, 
-내부 하드웨어 FIFO(First-In, First-Out) 버퍼와 전용 Pop Controller를 직접 설계하여 데이터 무결성을 검증했습니다.
-
-## 2. System Specification & Environment
-| Category | Details |
-| :--- | :--- |
-| Target Hardware | AMD Artix-7 FPGA (Basys 3 Development Board) |
-| EDA Tools | Xilinx Vivado 2020.2, VS Code |
-| Hardware Language| Verilog HDL (Gate-level & Behavioral Modeling) |
-| Peripherals | HC-SR04 (Ultrasonic), DHT11 (Temp/Humidity), 4-Digit 7-Segment (FND) |
-| Interface Protocol| UART (9600 bps, 8-N-1 Configuration), 1-Wire Bidirectional Protocol |
-
-## 3. Advanced Hardware Architecture & Module Details
-
-전체 시스템은 모듈러 설계(Modular Design) 원칙에 따라 기능별로 완전히 격리된 하위 모듈로 설계되었으며, 최상위 모듈(`top.v`)에서 유기적으로 인터페이싱됩니다.
-
-### 3.1. Sensor Control & Protocol Interface
-* `dht11.v` (온습도 센서 제어 유닛)
-<img width="2969" height="1135" alt="image" src="https://github.com/user-attachments/assets/b9efc5b1-8ad9-4e86-9fb4-033179cc8a76" />
-<img width="2896" height="1462" alt="image" src="https://github.com/user-attachments/assets/f7c5e65c-4863-463c-ad32-2e1500861acd" />
-    * Bidirectional I/O Control: 단일 핀(`inout`)을 시분할하여 FPGA가 마스터로서 Start Signal(최소 18ms Low)을 드라이브한 후,
-      즉시 수신 모드(High-Z 플로팅)로 전환하는 삼상 버퍼(Tri-state Buffer) 로직 구현.
-    * Time-to-Data Decoding: 1us 단위의 정밀 타이머(`tick_gen_1us`)를 기반으로, 센서가 응답하는 하이 펄스의
-      유지 시간(26~28us: 데이터 '0' / 70us: 데이터 '1')을 계측하여 40-bit 데이터 스트림을 에러 없이 복원하는 FSM 설계.
-
-* `sr04.v` (초음파 거리 측정 유닛)
-<img width="2968" height="1429" alt="image" src="https://github.com/user-attachments/assets/bc9c247b-63d5-40d7-a34d-fb3e46bc553a" />
-<img width="2758" height="1462" alt="image" src="https://github.com/user-attachments/assets/0fedebb2-b213-4ca9-99b4-57459ea6effe" />
-    * Time of Flight (ToF) 계측: 센서 트리거 조건인 10us의 High 펄스를 정밀 인가한 후,
-      돌아오는 Echo 신호의 High 유지 시간을 카운트하여 센서와 물체 간의 물리적 거리를 계산.
 
 ### 3.2. Async Data Buffering & Serial Communication
-<img width="2947" height="1240" alt="image" src="https://github.com/user-attachments/assets/82d6e8c2-1d1d-4b60-8094-4c1d4f3441fc" />
+
 
 * `fifo.v` (하드웨어 큐 버퍼)
     * Dual-Port Register Array: 16바이트 깊이(Depth 16, Width 8-bit)의 레지스터 어레이를 기반으로 순환 큐(Circular Queue) 구조의 FIFO 설계.
@@ -56,7 +20,7 @@
     * 6-bit 제어 버스(`i_mode`) 입력을 통해 로컬 물리 스위치와 UART 원격 명령의 원격 스위칭을 동시 수용.
 * `fnd_controller.v` (Time Division Multiplexing 디스플레이)
     * 4자리의 FND 잔상 효과(Persistence of Vision)를 이용하기 위해 1kHz 클럭 분주기를 구현하고,
-    * 상위 스위칭 데이터 선택 프로토콜에 따라 시계(`시:분` 또는 `초:밀리초`), 거리 데이터, 온습도 데이터를 선택적으로 라우팅하여 출력 레디오 최적화.
+    * 상위 스위칭 데이터 선택 프로토콜에 따라 시계(`시:분` 또는 `초:밀리초`), 거리 데이터, 온습도 데이터를 선택적으로 라우팅하여 출력 최적화.
 
 ## 전체 시스템 아키텍처 계층 구조 (Top-Down Block Diagram)
 <img width="2950" height="956" alt="image" src="https://github.com/user-attachments/assets/64a76f93-2662-4a22-a898-f017b0fb298b" />
@@ -109,147 +73,71 @@ AMD Artix™-7 (Basys 3) FPGA 보드를 활용하여 **디지털 시계(Watch), 
 | **Language** | Design | Verilog HDL |
 | | Verification | SystemVerilog |
 | **Debugging** | H/W Debugger | Vivado Integrated Logic Analyzer (ILA) |
-| | Simulation | Vivado Simulator / ModelSim |
+| | Simulation | Vivado Simulator |
 
 ---
+## 👨‍💻 팀원 소개 및 역할
 
-## 🗂️ 프로젝트 디렉터리 구조
-```text
-team_project_watch_stopwatch_uart_sensor/
-├── README.md                                # 프로젝트 설명서 (본 파일)
-├── team_project_watch_stopwatch_uart_sensor.xpr # Vivado 프로젝트 파일
-├── images/                                  # 발표 자료에서 추출한 설계 및 검증 이미지 리소스
-└── team_project_watch_stopwatch_uart_sensor.srcs/
-    ├── constrs_1/
-    │   └── imports/
-    │       └── const/
-    │           └── Basys-3-Master.xdc       # Basys 3 FPGA 핀 맵 매핑 파일
-    ├── sim_1/
-    │   └── new/                             # SystemVerilog 검증 소스 코드
-    │       ├── tb_fifo_sv.sv                # FIFO 단독 동작 및 Full/Empty 강제 생성 테스트벤치
-    │       ├── tb_rx_decoder_sv.sv          # UART RX 및 아스크 디코더 통합 검증
-    │       ├── tb_sender_top_sv.sv          # ASCII Sender 데이터 가공 검증
-    │       ├── tb_sender_fifo_uart_sv.sv    # Sender + FIFO + UART TX 토탈 송신 패스 검증
-    │       └── tb_uart_fifo_sv.sv           # UART 컨트롤러와 FIFO의 연동 테스트
-    └── sources_1/
-        └── imports/
-            └── imports/
-                ├── 20260221_top/
-                │   └── sender_top.v
-                └── source/                  # RTL 설계 소스 코드
-                    ├── sender/
-                    │   ├── fifo.v           # 16-deep Synchronous FIFO 버퍼
-                    │   ├── pop_controller.v # FIFO-UART TX 연동 팝 컨트롤러 FSM
-                    │   └── sender_top.v     # BCD 데이터를 아스키 문자로 변환하여 FIFO에 적재
-                    ├── sensor/
-                    │   ├── dht11.v          # DHT11 온습도 센서 원와이어 통신 및 디코더
-                    │   └── sr04.v           # HC-SR04 초음파 에코 시간 측정 및 거리 변환기
-                    ├── uart/
-                    │   ├── atscii2dec.v     # 수신된 아스키 입력을 스위치/버튼 펄스로 디코딩
-                    │   ├── baud_tick.v      # 9600 bps 전송 속도 맞춤용 보레이트 제너레이터
-                    │   ├── uart_rx.v        # UART Receiver
-                    │   ├── uart_tx.v        # UART Transmitter
-                    │   ├── uart_top.v       # UART RX, TX, Baud_tick 탑 모듈
-                    │   └── top.v            # 전체 시스템 최상위 모듈 (System Top)
-                    └── watch/
-                        ├── btn_debounce.v   # 물리 버튼 채터링 방지용 디바운서
-                        ├── control_unit.v   # 메인 제어 FSM (모드 전환 및 시간 조절)
-                        ├── fnd_controller.v # 4자리 7-Segment 스캔 멀티플렉서 (BCD-to-FND 디코더 내장)
-                        ├── tick_gen.v       # 스톱워치용 정밀 틱 제너레이터
-                        ├── tick_gen_watch.v # 시계 동작용 1초 틱 제너레이터
-                        ├── tick_cnt.v       # 스톱워치 카운터
-                        ├── tick_cnt_watch.v # 시계 카운터 (시/분/초)
-                        ├── top_watch.v      # 디지털 시계 서브 시스템 탑
-                        ├── top_stopwathch.v # 스톱워치 서브 시스템 탑
-                        └── top_stopwatch_watch.v # 시계, 스톱워치, 센서, FND 제어기 통합 데이터 탑
-```
-
+| 이름 | 담당 역할 |
+| :--------: |:------------------------------------------------------ |
+| **강동우** | SR센서 설계 및 검증, fnd_controller로의 datapath 통일  |
+| **안정원** | DHT11센서 설계 및 검증, fnd_controller로의 datapath 통일 |
+| **서어진** | UART+FIFO 설계 및 검증, PC 출력 확인 |
+| **문태성** | 전체 시스템 통합 및 검증, 구조 단순화 |
 ---
 
 ## 📐 시스템 아키텍처 (System Architecture)
 
 전체 시스템은 **센서 계측 블록(DATA_TOP)**과 **시리얼 전송 및 원격 제어 블록(UART_TOP)**으로 이원화되어 유기적으로 연동됩니다.
 
-```mermaid
-graph TD
-    %% 외부 입력
-    clk[W5 100MHz Clk] --> top
-    rst[U18 Reset Button] --> top
-    i_sw[i_sw 5:0 Switches] --> top
-    i_rx[i_rx UART RX Pin] --> top
-    i_echo[i_echo Echo Pin] --> top
-    io_dht11[io_dht11 One-Wire Pin] <--> top
-
-    subgraph top [System Top Module]
-        %% UART RX 패스
-        U_UART_TOP[UART Top Module: U_UART_TOP]
-        U_ASCII_DECODER[ASCII Decoder: U_ASCII_DECODER]
-        i_rx --> U_UART_TOP
-        U_UART_TOP -- "w_rx_data (8-bit)" --> U_ASCII_DECODER
-        U_ASCII_DECODER -- "w_ascii_dec_x (Button Signals)" --> U_STW_SW
-
-        %% 메인 데이터 및 센서 탑
-        U_STW_SW[Stopwatch/Watch/Sensor Top: U_STW_SW]
-        i_sw --> U_STW_SW
-        i_echo --> U_STW_SW
-        io_dht11 <--> U_STW_SW
-        
-        %% U_STW_SW 내부 구성
-        subgraph U_STW_SW [U_STW_SW: Stopwatch/Watch/Sensor Top]
-            U_CNTL[Control Unit FSM]
-            U_WATCH[Digital Clock Core]
-            U_SW[Stopwatch Core]
-            U_SR04[HC-SR04 Driver]
-            U_DHT11[DHT11 Driver]
-            U_FND_CNTL[FND Controller Multiplexer]
-            
-            U_CNTL -- "Control Signals" --> U_WATCH
-            U_CNTL -- "Control Signals" --> U_SW
-            U_CNTL -- "Control Signals" --> U_SR04
-            U_CNTL -- "Control Signals" --> U_DHT11
-            
-            U_WATCH & U_SW & U_SR04 & U_DHT11 --> MUX["Data Multiplex (Unified 16-bit)"]
-            MUX --> U_FND_CNTL
-        end
-
-        %% UART TX 패스
-        U_SENDER_TOP[ASCII Sender: U_SENDER_TOP]
-        U_FIFO[Synchronous FIFO: U_FIFO]
-        U_POP_CONTROLLER[Pop Controller: U_POP_CONTROLLER]
-        
-        MUX -- "w_mux_data (16-bit)" --> U_SENDER_TOP
-        U_FND_CNTL -- "Display Digit Selects" --> U_SENDER_TOP
-        
-        U_SENDER_TOP -- "o_fifo_push / o_fifo_push_data" --> U_FIFO
-        U_POP_CONTROLLER -- "o_tx_start (FIFO POP)" --> U_FIFO
-        U_POP_CONTROLLER -- "o_tx_start" --> U_UART_TOP
-        U_FIFO -- "w_fifo_pop_data" --> U_UART_TOP
-        U_UART_TOP -- "w_tx_done" --> U_POP_CONTROLLER
-        U_FIFO -- "w_fifo_empty" --> U_POP_CONTROLLER
-    end
-
-    %% 외부 출력
-    U_FND_CNTL --> o_fnd_digit[o_fnd_digit 3:0]
-    U_FND_CNTL --> o_fnd_data[o_fnd_data 7:0]
-    U_STW_SW --> o_trigger[o_trigger Pin]
-    U_UART_TOP --> o_tx[o_tx UART TX Pin]
-```
+<img width="2960" height="1082" alt="image" src="https://github.com/user-attachments/assets/006fbbda-7c8f-4f18-a0dd-4dc5ab08dc04" />
 
 ---
 
 ## 🌟 핵심 기능 및 모드 설정 명세
 
-### 1. 시스템 동작 모드 설정 (sw[1:0])
+## 1. 시스템 동작 모드 설정 (sw[1:0])
 시스템의 전체 계측 기능 모드는 보드상의 슬라이드 스위치 `sw[1:0]`을 조합하여 결정됩니다.
 
-| sw[1] | sw[0] | 동작 모드 | 주요 설명 및 제어 내용 |
-| :---: | :---: | :--- | :--- |
-| `0` | `0` | **디지털 시계 (Watch)** | 실시간 디지털 클럭 구동 및 자릿수별 개별 시간 조절 지원 |
-| `0` | `1` | **스톱워치 (Stopwatch)** | 10ms(0.01초) 단위 정밀 시간 누적 측정 및 Up/Down 제어 |
-| `1` | `0` | **초음파 센서 (SR04)** | HC-SR04 초음파 모듈을 활성화하여 물체와의 거리 측정 (cm) |
-| `1` | `1` | **온습도 센서 (DHT11)** | DHT11 모듈과의 1-Wire 통신을 활성화하여 온도/습도 측정 |
+| sw[2] | sw[1] | sw[0] | 동작 모드 | 주요 설명 및 제어 내용 |
+| :---: | :---: | :---: | :--- | :--- |
+| `0` | `0` | `0` | **디지털 시계 (Watch)** | 실시간 디지털 클럭 구동 (`시 : 분` 또는 `초 : 밀리초`)  |
+| `0` | `0` | `1` | **스톱워치 (Stopwatch)** | 10ms(0.01초) 단위 정밀 시간 누적 측정 및 Up/Down 제어 |
+| `0` | `1` | `0` | **초음파 센서 (SR04)** | SR04 초음파 모듈을 활성화하여 물체와의 거리 측정 (cm) |
+| `0` | `1` | `1` | **온습도 센서 (DHT11)** | DHT11 모듈과의 1-Wire 통신을 활성화하여 온도/습도 측정 |
+| `1` | `0` | `0` | **시간 변경 (Watch_change)** | Watch mode의 자릿수별 개별 시간 조절 지원 |
 
-### 2. 하드웨어 세부 제어 스위치 설정
+## 2. Sensor Control & Protocol Interface
+### `sr04.v` (초음파 거리 측정 유닛)
+<img width="2680" height="1308" alt="image" src="https://github.com/user-attachments/assets/a4331f62-88cc-46a9-ab4c-b6b8d67f0862" />
+<img width="2762" height="1161" alt="image" src="https://github.com/user-attachments/assets/5ef2af74-b782-49dd-a8cc-a016f0ec4699" />
+
+
+<img width="2968" height="1439" alt="image" src="https://github.com/user-attachments/assets/cd5f281a-5567-4c93-803f-0660d598942d" />
+<img width="2960" height="1467" alt="image" src="https://github.com/user-attachments/assets/7cc86b19-fdb3-49fc-a472-f9a2b0b805c7" />
+    * 1us_tick 대신 5.8us_tick 사용하여 / 연산을 없애고 counter로 거리 계산하여 하드웨어 자원 소모 줄임.
+
+
+### `dht11.v` (온습도 센서 제어 유닛)
+<img width="1881" height="705" alt="image" src="https://github.com/user-attachments/assets/89ff3e4d-df52-4797-84e8-cf66afbb9ec4" />
+    * Bidirectional I/O Control: 단일 핀(`inout`)을 시분할하여 FPGA가 마스터로서 Start Signal(최소 18ms Low)을 드라이브한 후,
+      즉시 수신 모드(High-Z 플로팅)로 전환하는 삼상 버퍼(Tri-state Buffer) 로직 구현.
+    * Time-to-Data Decoding: 1us 단위의 정밀 타이머(`tick_gen_1us`)를 기반으로, 센서가 응답하는 하이 펄스의
+      유지 시간(26~28us: 데이터 '0' / 70us: 데이터 '1')을 계측하여 40-bit 데이터 스트림을 에러 없이 복원하는 FSM 설계.
+
+<img width="2969" height="1135" alt="image" src="https://github.com/user-attachments/assets/511eab11-343b-4c16-9860-44db963aa3b7" />
+<img width="2960" height="1465" alt="image" src="https://github.com/user-attachments/assets/fb2be38a-054a-46fb-8b23-31bae887c471" />
+
+## 3. UART & FIFO
+<img width="1609" height="471" alt="image" src="https://github.com/user-attachments/assets/6364813f-7845-41d2-8731-d8a637814934" />
+
+<img width="2947" height="1240" alt="image" src="https://github.com/user-attachments/assets/82d6e8c2-1d1d-4b60-8094-4c1d4f3441fc" />
+
+
+
+
+
+
 기타 스위치를 통해 동작 중인 모드의 세부 표시 및 연산 방향을 제어할 수 있습니다.
 
 | 스위치 명 | 설정값 | 동작 및 기능 설명 |
